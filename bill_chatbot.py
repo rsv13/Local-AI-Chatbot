@@ -1,29 +1,39 @@
 import streamlit as st
 import ollama
+from pypdf import PdfReader
 
 MODEL = "llama3"
 
-# What the bot knows about the bill, baked in for now.
-BILL_FACTS = """
-EE mobile bill for Mr Rohit Vishwakarma. Account 225646602.
-Plan: Ess Plus SIM UL 36 - normally 36.00/month, minus an EE Colleague SIMO Offer
-discount of -26.00, so 10.00/month. Unlimited data, UK mins and texts, EU roaming.
-Paid by Direct Debit. No out-of-allowance charges.
-"""
-
-SYSTEM_PROMPT = (
-    "You are a friendly EE billing assistant. Answer clearly and concisely using "
-    "only the bill information below.\n\n" + BILL_FACTS
+BASE_INSTRUCTIONS = (
+    "You are a friendly EE billing assistant. Use ONLY the bill text below to answer. "
+    "If something isn't shown, say you can't see it on this bill. Never invent numbers."
 )
 
-st.title("EE Bill Help Bot")
-question = st.chat_input("Ask a question about your bill: ")
 
-if st.sidebar.button("Clear chat"):
-    st.session_state.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+def read_pdf(uploaded_file):
+    reader = PdfReader(uploaded_file)
+    return "\n".join((page.extract_text() or "") for page in reader.pages)
+
+
+def build_system_prompt(bill_text):
+    return f"{BASE_INSTRUCTIONS}\n\n--- BILL TEXT ---\n{bill_text}\n--- END BILL TEXT ---"
+
+
+st.title("EE Bill Help Bot")
+
+uploaded = st.sidebar.file_uploader("Upload your bill (PDF)", type="pdf")
+if uploaded is not None:
+    if st.session_state.get("bill_name") != uploaded.name:
+        st.session_state.bill_name = uploaded.name
+        st.session_state.messages = [
+            {"role": "system", "content": build_system_prompt(read_pdf(uploaded))}
+        ]
 
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    st.info("Please upload your EE bill (PDF) in the sidebar to get started.")
+    st.stop()
+
+question = st.chat_input("Ask a question about your bill: ")
 
 for message in st.session_state.messages:
     if message["role"] == "system":
