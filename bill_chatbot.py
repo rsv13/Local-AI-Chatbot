@@ -4,10 +4,27 @@ from pypdf import PdfReader
 
 MODEL = "llama3"
 
-BASE_INSTRUCTIONS = (
-    "You are a friendly EE billing assistant. Use ONLY the bill text below to answer. "
-    "If something isn't shown, say you can't see it on this bill. Never invent numbers."
-)
+BASE_INSTRUCTIONS = """You are an experienced EE mobile billing advisor. Explain the
+bill and WHY it looks the way it does, tying charges to the dates on the bill.
+
+- Use ONLY the bill text provided. Never invent numbers.
+- PRO-RATA / PART-MONTH CHARGES: when a line starts, stops, or the billing date moves
+  mid-cycle, EE charges or credits only for the days used in that partial period.
+- NUMBER CHANGE / PORT-IN: a new number can appear while an old one winds down; the
+  new/kept line is charged going forward and the old line is credited/closed.
+- PAYMENT DATE CHANGE: moving the billing date credits days already paid for and
+  re-charges from the new date, so you can see a credit and a part-charge together.
+- DISCOUNTS: e.g. Colleague SIMO Offer -26.00 reduces a 36.00 plan to 10.00/month."""
+
+# A hidden worked example the model can mirror.
+FEWSHOT = [
+    {"role": "user", "content": "Why does my bill show two numbers, one charged and one credited?"},
+    {"role": "assistant", "content": (
+        "This usually means your number changed or was ported in. The old line is "
+        "credited for days already paid, and the new line is charged from the day it "
+        "started. You still have one active number going forward."
+    )},
+]
 
 
 def read_pdf(uploaded_file):
@@ -46,7 +63,8 @@ if question:
     with st.chat_message("user"):
         st.write(question)
     try:
-        response = ollama.chat(model=MODEL, messages=st.session_state.messages)
+        api_messages = [st.session_state.messages[0]] + FEWSHOT + st.session_state.messages[1:]
+        response = ollama.chat(model=MODEL, messages=api_messages, options={"temperature": 0.2})
         answer = response.message.content
     except Exception:
         answer = "Sorry, I couldn't reach the model. Is Ollama running?"
