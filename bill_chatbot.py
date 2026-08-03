@@ -8,15 +8,15 @@ BASE_INSTRUCTIONS = """You are an experienced EE mobile billing advisor. Explain
 bill and WHY it looks the way it does, tying charges to the dates on the bill.
 
 - Use ONLY the bill text provided. Never invent numbers.
-- PRO-RATA / PART-MONTH CHARGES: when a line starts, stops, or the billing date moves
-  mid-cycle, EE charges or credits only for the days used in that partial period.
-- NUMBER CHANGE / PORT-IN: a new number can appear while an old one winds down; the
-  new/kept line is charged going forward and the old line is credited/closed.
-- PAYMENT DATE CHANGE: moving the billing date credits days already paid for and
-  re-charges from the new date, so you can see a credit and a part-charge together.
-- DISCOUNTS: e.g. Colleague SIMO Offer -26.00 reduces a 36.00 plan to 10.00/month."""
+- PRO-RATA / PART-MONTH CHARGES: partial periods are charged/credited by the day.
+- NUMBER CHANGE / PORT-IN: a new number can appear while an old one winds down.
+- PAYMENT DATE CHANGE: credits days already paid and re-charges from the new date.
+- DISCOUNTS: e.g. Colleague SIMO Offer -26.00 reduces a 36.00 plan to 10.00/month.
 
-# A hidden worked example the model can mirror.
+COMPARING MULTIPLE BILLS: you may be given several bills, each under a header line
+"===== BILL: <filename> =====". Compare months and explain why a bill went up or down,
+and estimate next month from the recurring charge (make clear it's an estimate)."""
+
 FEWSHOT = [
     {"role": "user", "content": "Why does my bill show two numbers, one charged and one credited?"},
     {"role": "assistant", "content": (
@@ -32,25 +32,46 @@ def read_pdf(uploaded_file):
     return "\n".join((page.extract_text() or "") for page in reader.pages)
 
 
-def build_system_prompt(bill_text):
-    return f"{BASE_INSTRUCTIONS}\n\n--- BILL TEXT ---\n{bill_text}\n--- END BILL TEXT ---"
+def build_system_prompt(bills):
+    if isinstance(bills, str):
+        bills = {"your bill": bills}
+    sections = [f"===== BILL: {name} =====\n{text}" for name, text in bills.items()]
+    joined = "\n\n".join(sections)
+    return f"{BASE_INSTRUCTIONS}\n\n--- BILLS ON FILE ({len(bills)}) ---\n{joined}\n--- END BILLS ---"
 
 
 st.title("EE Bill Help Bot")
 
-uploaded = st.sidebar.file_uploader("Upload your bill (PDF)", type="pdf")
-if uploaded is not None:
-    if st.session_state.get("bill_name") != uploaded.name:
-        st.session_state.bill_name = uploaded.name
-        st.session_state.messages = [
-            {"role": "system", "content": build_system_prompt(read_pdf(uploaded))}
-        ]
-
+if "bills" not in st.session_state:
+    st.session_state.bills = {}
 if "messages" not in st.session_state:
-    st.info("Please upload your EE bill (PDF) in the sidebar to get started.")
+    st.session_state.messages = []
+
+st.sidebar.header("Your bills")
+uploaded_files = st.sidebar.file_uploader("Upload bill(s) (PDF)", type="pdf", accept_multiple_files=True)
+if uploaded_files:
+    for uf in uploaded_files:
+        if uf.name not in st.session_state.bills:
+            st.session_state.bills[uf.name] = read_pdf(uf)
+
+if st.session_state.bills:
+    system_prompt = build_system_prompt(st.session_state.bills)
+    if not st.session_state.messages:
+        st.session_state.messages = [{"role": "system", "content": system_prompt}]
+    else:
+        st.session_state.messages[0] = {"role": "system", "content": system_prompt}
+    st.sidebar.success(f"{len(st.session_state.bills)} bill(s) loaded:")
+    for name in st.session_state.bills:
+        st.sidebar.write(f"- {name}")
+
+if st.sidebar.button("Clear chat"):
+    st.session_state.messages = st.session_state.messages[:1]
+
+if not st.session_state.messages:
+    st.info("Please upload one or more EE bills (PDF) in the sidebar to get started.")
     st.stop()
 
-question = st.chat_input("Ask a question about your bill: ")
+question = st.chat_input("Ask about your bill(s): ")
 
 for message in st.session_state.messages:
     if message["role"] == "system":
