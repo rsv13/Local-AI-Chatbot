@@ -1,8 +1,12 @@
+import re
 import streamlit as st
 import ollama
 from pypdf import PdfReader
 
-MODEL = "llama3"
+MODEL = "qwen3:14b"
+
+# Developer switch: show a debug panel of what the bot has loaded.
+DEBUG = False
 
 BASE_INSTRUCTIONS = """You are an experienced EE mobile billing advisor. Explain the
 bill and WHY it looks the way it does, tying charges to the dates on the bill.
@@ -25,6 +29,11 @@ FEWSHOT = [
         "started. You still have one active number going forward."
     )},
 ]
+
+
+def strip_thinking(text):
+    """Remove <think>...</think> reasoning (e.g. Qwen3) so only the answer shows."""
+    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
 
 def read_pdf(uploaded_file):
@@ -67,6 +76,10 @@ if st.session_state.bills:
 if st.sidebar.button("Clear chat"):
     st.session_state.messages = st.session_state.messages[:1]
 
+if DEBUG and st.session_state.messages:
+    with st.sidebar.expander("What the bot has loaded"):
+        st.text_area("System prompt", st.session_state.messages[0]["content"], height=200)
+
 if not st.session_state.messages:
     st.info("Please upload one or more EE bills (PDF) in the sidebar to get started.")
     st.stop()
@@ -86,7 +99,7 @@ if question:
     try:
         api_messages = [st.session_state.messages[0]] + FEWSHOT + st.session_state.messages[1:]
         response = ollama.chat(model=MODEL, messages=api_messages, options={"temperature": 0.2})
-        answer = response.message.content
+        answer = strip_thinking(response.message.content)
     except Exception:
         answer = "Sorry, I couldn't reach the model. Is Ollama running?"
     with st.chat_message("assistant"):
