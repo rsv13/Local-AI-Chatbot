@@ -55,9 +55,14 @@ if "bills" not in st.session_state:
     st.session_state.bills = {}
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "uploader_key" not in st.session_state:
+    st.session_state.uploader_key = 0
 
 st.sidebar.header("Your bills")
-uploaded_files = st.sidebar.file_uploader("Upload bill(s) (PDF)", type="pdf", accept_multiple_files=True)
+uploaded_files = st.sidebar.file_uploader(
+    "Upload bill(s) (PDF)", type="pdf", accept_multiple_files=True,
+    key=f"uploader_{st.session_state.uploader_key}",
+)
 if uploaded_files:
     for uf in uploaded_files:
         if uf.name not in st.session_state.bills:
@@ -73,8 +78,14 @@ if st.session_state.bills:
     for name in st.session_state.bills:
         st.sidebar.write(f"- {name}")
 
-if st.sidebar.button("Clear chat"):
+col1, col2 = st.sidebar.columns(2)
+if col1.button("Clear chat"):
     st.session_state.messages = st.session_state.messages[:1]
+if col2.button("Remove all bills"):
+    st.session_state.bills = {}
+    st.session_state.messages = []
+    st.session_state.uploader_key += 1
+    st.rerun()
 
 if DEBUG and st.session_state.messages:
     with st.sidebar.expander("What the bot has loaded"):
