@@ -3,38 +3,12 @@ import streamlit as st
 import ollama
 from pypdf import PdfReader
 
+from prompts import BASE_INSTRUCTIONS, FEWSHOT
+
 MODEL = "qwen3:14b"
 
 # Developer switch: show a debug panel of what the bot has loaded.
 DEBUG = False
-
-BASE_INSTRUCTIONS = """You are an experienced EE mobile billing advisor. Explain the
-bill and WHY it looks the way it does, tying charges to the dates on the bill.
-
-- Use ONLY the bill text provided. Never invent numbers.\n- TRUST THE CUSTOMER ABOUT THEIR OWN NUMBER: if they tell you which number is\n  theirs, believe them and anchor your analysis to it. Never argue a bill isn't\n  theirs; explain any mismatch as a number change / port-in.\n- The EARLIEST bill often shows a TEMPORARY number; the customer's real number is\n  the one that CONTINUES on the most recent bills and is charged month after month.
-- PRO-RATA / PART-MONTH CHARGES: partial periods are charged/credited by the day.
-- NUMBER CHANGE / PORT-IN: a new number can appear while an old one winds down.
-- PAYMENT DATE CHANGE: credits days already paid and re-charges from the new date.
-- DISCOUNTS: e.g. Colleague SIMO Offer -26.00 reduces a 36.00 plan to 10.00/month.
-
-COMPARING MULTIPLE BILLS: you may be given several bills, each under a header line
-"===== BILL: <filename> =====". Compare months and explain why a bill went up or down,
-and estimate next month from the recurring charge (make clear it's an estimate)."""
-
-FEWSHOT = [
-    {"role": "user", "content": "Why does my bill show two numbers, one charged and one credited?"},
-    {"role": "assistant", "content": (
-        "This usually means your number changed or was ported in. The old line is "
-        "credited for days already paid, and the new line is charged from the day it "
-        "started. You still have one active number going forward."
-    )},
-]
-
-
-def strip_thinking(text):
-    """Remove <think>...</think> reasoning (e.g. Qwen3) so only the answer shows."""
-    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
-
 
 def read_pdf(uploaded_file):
     reader = PdfReader(uploaded_file)
